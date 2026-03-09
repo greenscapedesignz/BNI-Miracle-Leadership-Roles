@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BNI Miracle · Chapter Leadership Diagnostic</title>
+  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      document.getElementById('root').innerHTML =
+        '<div style="padding:32px;color:#F5A0A0;font-family:monospace;background:#0D1526;min-height:100vh">' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:12px">⚠ Loading Error</div>' +
+        '<div style="font-size:13px;color:#7A8BA3;margin-bottom:8px">' + msg + '</div>' +
+        '<div style="font-size:11px;color:#3A5070">Line: ' + line + ' · Col: ' + col + '</div>' +
+        '<div style="font-size:11px;color:#3A5070;margin-top:16px">If this persists: open browser DevTools (F12) → Console tab for full error details.</div>' +
+        '</div>';
+      return false;
+    };
+  </script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#080D1A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+    select option{background:#0D1526;color:#F0E6D3;}
+    ::-webkit-scrollbar{width:6px;}
+    ::-webkit-scrollbar-track{background:#080D1A;}
+    ::-webkit-scrollbar-thumb{background:#1E2D4A;border-radius:3px;}
+    textarea{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react,env">
+    const { useState, useRef, useEffect } = React;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOOGLE SHEETS CONFIG
+// After deploying your Apps Script, paste your Web App URL below.
+// Leave as-is to run the app locally without Sheets sync.
+// ═══════════════════════════════════════════════════════════════════════════════
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzKVS0d9wG8rk8LAcYQE5tpxgT_lG-rCiEXareyht6qrxInUZoHrlE5PNo572fClopOGw/exec";
+
+const sheetsAPI = {
+  configured() {
+    return SCRIPT_URL && !SCRIPT_URL.includes("YOUR_APPS");
+  },
+  async get(params = {}) {
+    if (!this.configured()) return null;
+    try {
+      const qs = Object.entries({action:"getAll",...params}).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join("&");
+      const res = await fetch(`${SCRIPT_URL}?${qs}`, {
+        redirect: "follow",
+        mode: "cors",
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.json();
+    } catch(e) { console.warn("Sheets GET error:", e); return null; }
+  },
+  async post(data) {
+    if (!this.configured()) return null;
+    try {
+      await fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(data)
+      });
+      return { ok: true };
+    } catch(e) { console.warn("Sheets POST error:", e); return null; }
+  }
+};
+
+// Reconstruct a full member record from Sheets row (recomputes roleFits client-side)
+function reconstructFromSheets(row) {
+  const roleFits = computeRoleFit(row.scores || {}, row.personality, row.composite, row.risks);
+  return {
+    ...row,
+    roleFits,
+    hasPalms: row.hasPalms || false,
+    quizTotal: row.quizTotal || 0,
+    quizNorm: row.quizNorm || 0,
+  };
+}
+
+
+// ── CHAPTER MEMBERS ───────────────────────────────────────────────────────────
+const MEMBERS = [
+  "Amrath Acharya","Anirban Pal","Atanu Das","Bharath Kumar Karanam",
+  "Bijith Bhaskar","Deepak Jangir","Devendran Suresh Babu","Farhath Unnisa",
+  "Harshitha S Gowda","Hemanshu Bahety","Jagriti Agarwal","Jitendra Kumar",
+  "Krishan KV","Malvika Kamath","Meghana Prabhu","Meghana Vaswani",
+  "Mohamed Azhar CP","Mohammed Murtaza","Monica S","Naveen Kumar D",
+  "Nikita Agarwal","Poonam Singh","Poorna Hari Prasad Sama","Rakesh Radhakrishnan",
+  "Ramesh Nayak","Sadan Ram","Shahul Hameed","Shaik Tabassum",
+  "Shanti Venkatesh","Sheelan Mishra","Shivakumar S","Shubham Tibrewala",
+  "Sirisha Kode","Sunil Kumar Reddy","Suresh Jalan","T N Rohith",
+  "Venkat Raman","Yesudass A",
+];
+
+// ── QUIZ QUESTIONS (17 — corrected for BNI Miracle chapter context) ───────────
+const QUIZ_QUESTIONS = [
+  // ── RELIABILITY ─────────────────────────────────────────────────────────────
+  {
+    id:1, indicator:"reliability", tag:"Attendance Commitment",
+    type:"scenario",
+    question:"Two of last month's Thursday meetings clashed with personal obligations that genuinely couldn't be moved.",
+    options:[
+      {text:"Missed both. Life happens.",score:1},
+      {text:"Attended one, arranged a substitute for the other.",score:3},
+      {text:"Attended both. I rescheduled my personal obligations.",score:5},
+    ]
+  },
+  {
+    id:2, indicator:"reliability", tag:"Follow-Through",
+    type:"forced_choice",
+    question:"Which of these describes you more accurately in chapter commitments?",
+    options:[
+      {text:"I am the person who gets things done thoroughly, even if it takes longer than expected.",score:4},
+      {text:"I am the person who gets things done quickly and moves on to the next priority.",score:3},
+      {text:"I commit fully when I can clearly see how something benefits my business.",score:1},
+      {text:"I follow through on everything I commit to, without exception, even when it's inconvenient.",score:5},
+    ]
+  },
+  // ── BNI SYSTEM KNOWLEDGE ────────────────────────────────────────────────────
+  {
+    id:3, indicator:"bni", tag:"System Fluency",
+    type:"scenario",
+    question:"A member who joined three weeks ago asks you: 'How do I actually start getting referrals?' Your honest answer is closest to...",
+    options:[
+      {text:"'Show up consistently and people will start referring you over time.'",score:1},
+      {text:"'Complete your 1-2-1s, learn what your fellow members actually need, and be specific in your weekly ask.'",score:3},
+      {text:"'Start with GAINS conversations, track every TYFCB, give first without expectation, and engineer your 30-second ask around one specific prospect profile each week.'",score:5},
+    ]
+  },
+  {
+    id:4, indicator:"bni", tag:"Process Mastery",
+    type:"forced_choice",
+    question:"When you think about BNI's operating systems — VCP, PALMS, traffic lights, TYFCB, Power Teams — which is closest to your honest relationship with them?",
+    options:[
+      {text:"I understand them conceptually and use most of them when I remember.",score:3},
+      {text:"I use all of them actively, track my own numbers, and can explain them clearly to a new member.",score:5},
+      {text:"I know they exist but haven't invested time in learning them deeply.",score:1},
+      {text:"I focus on relationships and referrals — the systems feel like admin overhead.",score:2},
+    ]
+  },
+  // ── REFERRAL BEHAVIOUR ──────────────────────────────────────────────────────
+  {
+    id:5, indicator:"referrals", tag:"Referral Volume",
+    type:"scenario",
+    question:"In the last 3 months, how many genuine referrals — people you personally connected, not just names you mentioned — did you pass to fellow members?",
+    options:[
+      {text:"Zero to two.",score:1},
+      {text:"Three to five.",score:3},
+      {text:"Six or more, and I tracked the TYFCB for each.",score:5},
+    ]
+  },
+  {
+    id:6, indicator:"referrals", tag:"Referral Instinct",
+    type:"forced_choice",
+    question:"A member mentions in passing that they are trying to break into the hospitality sector. You know someone who fits perfectly but have never referred them to anyone before. What do you do?",
+    options:[
+      {text:"Note it mentally and bring it up with the member privately after the meeting.",score:3},
+      {text:"Make the introduction immediately in the room with a warm verbal endorsement.",score:5},
+      {text:"Wait until you know the member better before committing to an introduction.",score:2},
+      {text:"Send a WhatsApp message connecting both parties that evening.",score:4},
+    ]
+  },
+  // ── INFLUENCE ───────────────────────────────────────────────────────────────
+  {
+    id:7, indicator:"influence", tag:"Social Gravity",
+    type:"forced_choice",
+    question:"Which statement is most true about your role in the chapter's group dynamics?",
+    options:[
+      {text:"I am someone others consult before making a chapter-level decision.",score:5},
+      {text:"I am respected and my opinions are heard, but I rarely drive chapter direction.",score:3},
+      {text:"I prefer to stay out of chapter politics and focus on my own business outcomes.",score:1},
+      {text:"I actively build consensus and bring members together around shared goals.",score:4},
+    ]
+  },
+  {
+    id:8, indicator:"influence", tag:"Member Investment",
+    type:"scenario",
+    question:"A member who joined 4 months ago is visibly disengaged — attending but not participating, no referrals, declining 1-2-1 invites. Nobody has officially assigned you responsibility for them.",
+    options:[
+      {text:"I'd mention it to the president or VP so the right person can handle it.",score:2},
+      {text:"I'd have a genuine one-on-one conversation with them to understand what's going wrong.",score:3},
+      {text:"I'd take personal ownership — 1-2-1s, advocacy in the room, introductions, and a check-in after each meeting until they find their footing.",score:5},
+    ]
+  },
+  // ── COMMUNICATION ───────────────────────────────────────────────────────────
+  {
+    id:9, indicator:"communication", tag:"30-Second Precision",
+    question:"BNI Miracle runs 30-second weekly presentations — not 60 seconds. In 30 seconds you cannot introduce yourself, explain your business, AND make a specific ask. What do you do?",
+    type:"forced_choice",
+    options:[
+      {text:"I rotate between introducing myself, my business, and my ask across different weeks.",score:3},
+      {text:"I treat 30 seconds as a constraint and engineer one razor-sharp ask that changes every week.",score:5},
+      {text:"I speak quickly to fit everything in — introduction, business, and ask.",score:2},
+      {text:"I use the time for whichever feels most relevant that particular week.",score:1},
+    ]
+  },
+  {
+    id:10, indicator:"communication", tag:"8-Minute Feature",
+    type:"scenario",
+    question:"You have been allocated the 8-minute feature presentation next month. How do you approach it?",
+    options:[
+      {text:"I'll prepare something the week before and speak from experience — I know my business well.",score:1},
+      {text:"I'll structure it in advance, rehearse the timing, and design a specific referral ask into the close.",score:3},
+      {text:"I'll research what referral gaps exist in the chapter, build a narrative that educates members on exactly how to refer me, rehearse multiple times, and prepare handouts or a visual.",score:5},
+    ]
+  },
+  // ── ENERGY — ONLINE ────────────────────────────────────────────────────────
+  {
+    id:11, indicator:"energy", tag:"Online Presence",
+    type:"forced_choice",
+    question:"BNI Miracle meets online three weeks out of four. Which describes your online meeting behaviour most honestly?",
+    options:[
+      {text:"Camera on, engaged, I use the chat actively and I make breakout rooms feel like real conversations.",score:5},
+      {text:"Camera on, I participate when addressed, but online meetings feel less natural than in-person.",score:3},
+      {text:"I attend and contribute but find it harder to make an impact through a screen.",score:2},
+      {text:"I sometimes drop to audio-only when the meeting runs long or I'm multitasking.",score:1},
+    ]
+  },
+  // ── ENERGY — OFFLINE ──────────────────────────────────────────────────────
+  {
+    id:12, indicator:"energy", tag:"Room Presence (Offline)",
+    type:"scenario",
+    question:"It's the monthly offline meeting. The room feels flat before the president calls the meeting to order. What do you naturally do?",
+    options:[
+      {text:"Find my seat, review my notes, and wait for the meeting to begin.",score:1},
+      {text:"Greet nearby members, make small talk, and try to warm the room up.",score:3},
+      {text:"Actively move around the room, spark conversations, introduce people who haven't met, and shift the energy before a word of the formal agenda is spoken.",score:5},
+    ]
+  },
+  // ── GIVERS GAIN ATTITUDE ──────────────────────────────────────────────────
+  {
+    id:13, indicator:"influence", tag:"Givers Gain (Attitude)",
+    type:"scenario",
+    question:"A member who has never referred you — and shows no immediate signs of doing so — asks you to personally introduce them to three of your best clients. The introductions would genuinely serve your clients well.",
+    options:[
+      {text:"I'd make the introductions. If it helps everyone, that's enough reason.",score:5},
+      {text:"I'd make one introduction as a gesture, and see how the relationship develops before going further.",score:3},
+      {text:"I'd feel uncomfortable giving that level of access without some reciprocity first.",score:1},
+    ]
+  },
+  // ── MOTIVE ───────────────────────────────────────────────────────────────
+  {
+    id:14, indicator:"bni", tag:"Leadership Motivation",
+    type:"forced_choice",
+    question:"If you were to take on a chapter role this term, what would make it feel genuinely worthwhile six months from now?",
+    options:[
+      {text:"Measurable growth in my own referral pipeline and closed business.",score:2},
+      {text:"Seeing the chapter metrics — visitor conversion, referral volume, retention — improve because of work I led.",score:5},
+      {text:"Being recognised as someone who contributed meaningfully to the chapter's culture.",score:3},
+      {text:"Building relationships with members I wouldn't have connected with otherwise.",score:4},
+    ]
+  },
+  // ── RESILIENCE ───────────────────────────────────────────────────────────
+  {
+    id:15, indicator:"reliability", tag:"Role Resilience",
+    type:"scenario",
+    question:"Three months into a chapter role, your initiatives aren't gaining traction — members aren't engaging, results aren't visible, and you're putting in more time than expected. What do you do?",
+    options:[
+      {text:"Reassess whether the role is the right fit and have an honest conversation with the president.",score:3},
+      {text:"Push through — results take time and I committed to the full term.",score:4},
+      {text:"Diagnose specifically what isn't working, adjust the approach, and set a 30-day recovery target for myself.",score:5},
+    ]
+  },
+  // ── PERSONALITY ──────────────────────────────────────────────────────────
+  {
+    id:16, indicator:"personality", tag:"Natural Mode",
+    question:"When you are at your most effective in a group setting like BNI, you are usually...",
+    type:"personality",
+    options:[
+      {text:"Analyzing data, identifying patterns, improving systems and processes.",personality:"Analytical"},
+      {text:"Connecting people, making introductions, building bridges across groups.",personality:"Connector"},
+      {text:"Teaching, explaining, helping others understand and grow.",personality:"Teacher"},
+      {text:"Organising, planning, keeping people and processes on track.",personality:"Organizer"},
+      {text:"Creating content, capturing moments, producing things that represent the group visually.",personality:"Creative"},
+      {text:"Inspiring others, building culture, making people feel recognised and valued.",personality:"Influencer"},
+    ]
+  },
+  {
+    id:17, indicator:"personality", tag:"Instinct Task",
+    type:"personality",
+    question:"The chapter task you would genuinely volunteer for without being asked — not the one you think you should volunteer for:",
+    options:[
+      {text:"Reviewing traffic light reports and identifying who needs coaching.",personality:"Analytical"},
+      {text:"Meeting every visitor at the door and making them feel like they belong.",personality:"Connector"},
+      {text:"Designing and delivering the weekly education slot.",personality:"Teacher"},
+      {text:"Managing the chapter calendar, agenda, and operational logistics.",personality:"Organizer"},
+      {text:"Running the chapter's social media or photographing meetings.",personality:"Creative"},
+      {text:"Publicly recognising members' milestones and wins every week.",personality:"Influencer"},
+    ]
+  },
+];
+
+const RISK_QUESTIONS = [
+  {id:"r1",text:"I have missed more than 3 chapter meetings in the last 3 months",flag:"Low Attendance"},
+  {id:"r2",text:"I have passed fewer than 5 referrals in the last quarter",flag:"Low Referrals"},
+  {id:"r3",text:"I sometimes find chapter group dynamics or internal politics frustrating",flag:"Conflict Risk"},
+  {id:"r4",text:"My schedule over the next 6 months is likely to be very full or unpredictable",flag:"Time Constraints"},
+];
+
+// ── ROLES ─────────────────────────────────────────────────────────────────────
+const TEAM_COLORS = {
+  "VP Team":"#7CC96E",
+  "President's Team":"#4ABCF5",
+  "Secretary-Treasurer Team":"#D4A843",
+};
+
+const ROLES = [
+  {id:"community_builder",title:"Community Builder",team:"VP Team",icon:"🤝",minComposite:55,
+   personalities:["Connector","Influencer"],
+   weights:{energy:3,communication:2,reliability:2,influence:2,bni:1,referrals:2},
+   responsibilities:["Organise social events and coffee connects","Celebrate member birthdays and milestones","Welcome new members and help them integrate","Check in on sick or absent members","Share and promote Givers Gain stories"],
+   assignees:{primary:"Amrath Acharya",secondary:"Sadan Ram",support:["Shubham Tibrewala"]}},
+  {id:"member_engagement",title:"Member Engagement",team:"VP Team",icon:"📈",minComposite:60,
+   personalities:["Analytical","Connector"],
+   weights:{reliability:3,bni:3,influence:2,referrals:2,communication:1,energy:1},
+   responsibilities:["Monitor PALMS for low member activity","Encourage 1-to-1 meetings and CEUs","Recognise top performers","Coach members in Grey or Red traffic lights","Promote regional training opportunities"],
+   assignees:{primary:"Atanu Das",secondary:"Shubham Tibrewala",support:["Shahul Hameed"]}},
+  {id:"retention_specialist",title:"Retention Specialist",team:"VP Team",icon:"🔒",minComposite:60,
+   personalities:["Organizer","Connector"],
+   weights:{reliability:3,communication:3,bni:2,influence:2,energy:1,referrals:1},
+   responsibilities:["Monitor membership dues and renewal reports","Contact members 90 days before expiry","Conduct happiness and exit interviews","Identify members at risk of leaving","Report retention statistics to the VP"],
+   assignees:{primary:"Bijith Bhaskar",secondary:"Bharath Kumar Karanam",support:["Meghana Vaswani"]}},
+  {id:"mentor_specialist",title:"Mentor Specialist",team:"VP Team",icon:"🎓",minComposite:68,
+   personalities:["Teacher","Connector"],
+   weights:{communication:3,bni:3,influence:2,reliability:2,energy:1,referrals:1},
+   responsibilities:["Assign mentors to new members","Track Passport to Success progress","Schedule inductions for completing members","Train mentors on their responsibilities","Ensure new members feel supported"],
+   assignees:{primary:"Sirisha Kode",secondary:"Sheelan Mishra",support:["Monica S"]}},
+  {id:"referral_quality",title:"Referral Quality",team:"VP Team",icon:"🔍",minComposite:62,
+   personalities:["Analytical","Organizer"],
+   weights:{bni:3,reliability:3,referrals:3,communication:1,influence:1,energy:1},
+   responsibilities:["Randomly audit referrals passed within the chapter","Call referral receivers to verify quality","Verify reported closed business amounts","Educate members on referral vs lead differences","Track internal and external referral trends"],
+   assignees:{primary:"Nikita Agarwal",secondary:"Amrath Acharya",support:["Farhath Unnisa"]}},
+  {id:"quality_assurance",title:"Quality Assurance",team:"VP Team",icon:"✅",minComposite:60,
+   personalities:["Analytical","Organizer"],
+   weights:{bni:3,reliability:3,communication:2,influence:1,referrals:1,energy:2},
+   responsibilities:["Review new member applications","Conduct reference checks for applicants","Interview applicants for classification suitability","Ensure no classification conflicts exist","Report findings to the Membership Committee"],
+   assignees:{primary:"Jagriti Agarwal",secondary:"Shahul Hameed",support:["Hemanshu Bahety"]}},
+  {id:"attendance_specialist",title:"Attendance Specialist",team:"VP Team",icon:"📅",minComposite:50,
+   personalities:["Organizer","Analytical"],
+   weights:{reliability:4,bni:2,communication:2,influence:1,energy:1,referrals:2},
+   responsibilities:["Mark weekly attendance in PALMS","Monitor the three-absence rule","Send warning letters for attendance issues","Call absent members to check in","Report chronic lateness to the VP"],
+   assignees:{primary:"Shanti Venkatesh",secondary:"Jagriti Agarwal",support:["Poorna Hari Prasad Sama"]}},
+  {id:"member_relationships",title:"Member Relationships Specialist",team:"VP Team",icon:"🕊️",minComposite:65,
+   personalities:["Influencer","Teacher"],
+   weights:{influence:3,communication:3,bni:2,energy:2,reliability:1,referrals:1},
+   responsibilities:["Manage and resolve member conflicts","Listen to member concerns neutrally","Consult with VP or Director on BNI policies","Facilitate mediation between members","Ensure members follow the BNI Code of Ethics"],
+   assignees:{primary:"Sheelan Mishra",secondary:"T N Rohith",support:["Naveen Kumar D"]}},
+  {id:"education_coordinator",title:"Education Coordinator",team:"President's Team",icon:"📚",minComposite:65,
+   personalities:["Teacher","Analytical"],
+   weights:{communication:3,bni:3,influence:2,energy:2,reliability:1,referrals:1},
+   responsibilities:["Select weekly networking topic","Prepare a 3–5 minute presentation each week","Coordinate with Secretary-Treasurer for slides","Engage members by asking questions","Promote BNI podcast episodes and learning resources"],
+   assignees:{primary:"Sheelan Mishra",secondary:null,support:["Meghana Prabhu"]}},
+  {id:"power_team",title:"Power Team Coordinator",team:"President's Team",icon:"⚡",minComposite:65,
+   personalities:["Connector","Analytical"],
+   weights:{bni:3,referrals:3,influence:2,communication:2,reliability:1,energy:1},
+   responsibilities:["Identify Power Team groups within the chapter","Schedule monthly Power Team meetings","Identify missing professions in each team","Review referral flow within Power Teams","Report Power Team success to the President"],
+   assignees:{primary:"Atanu Das",secondary:null,support:["Sadan Ram"]}},
+  {id:"bni_connect",title:"BNI Connect Coordinator",team:"President's Team",icon:"🌐",minComposite:45,
+   personalities:["Organizer","Creative"],
+   weights:{reliability:3,bni:3,communication:2,energy:1,influence:1,referrals:2},
+   responsibilities:["Update member roster online regularly","Ensure all profiles have photos","Update leadership team titles","Remove dropped members promptly","Help members improve profile keywords","Train members on basic BNI Connect usage"],
+   assignees:{primary:"Jitendra Kumar",secondary:null,support:[]}},
+  {id:"one_to_one",title:"One-to-One Coordinator",team:"President's Team",icon:"🤲",minComposite:55,
+   personalities:["Organizer","Connector"],
+   weights:{bni:3,reliability:2,referrals:2,communication:2,influence:1,energy:2},
+   responsibilities:["Run 1-to-1 meeting report from PALMS","Identify members with zero 1-to-1 meetings","Match members for new meetings","Promote use of the GAINS worksheet","Organise Stack Days to increase 1-2-1 volume"],
+   assignees:{primary:"Nikita Agarwal",secondary:null,support:["Venkat Raman"]}},
+  {id:"joint_call",title:"Joint Call Coordinator",team:"President's Team",icon:"📞",minComposite:60,
+   personalities:["Connector","Influencer"],
+   weights:{referrals:3,communication:3,influence:2,bni:2,energy:1,reliability:1},
+   responsibilities:["Identify members who can collaborate for sales calls","Schedule joint sales calls between members","Coach members on edifying partners during calls","Track revenue generated from joint calls","Share joint call success stories"],
+   assignees:{primary:"Sadan Ram",secondary:null,support:[]}},
+  {id:"tyfcb",title:"TYFCB Coordinator",team:"President's Team",icon:"💰",minComposite:55,
+   personalities:["Analytical","Organizer"],
+   weights:{bni:3,reliability:3,referrals:3,communication:1,influence:1,energy:1},
+   responsibilities:["Ensure TYFCB slips are entered online","Audit large slips above ₹1 lakh","Announce Notable Networkers in meetings","Track Seat Value of all members","Encourage members to thank those who gave referrals"],
+   assignees:{primary:"Jagriti Agarwal",secondary:null,support:["Krishan KV"]}},
+  {id:"weekly_presentation",title:"Weekly Presentation Coordinator",team:"President's Team",icon:"🎤",minComposite:60,
+   personalities:["Influencer","Organizer"],
+   weights:{communication:3,energy:3,bni:2,reliability:2,influence:1,referrals:1},
+   responsibilities:["Manage weekly speaker order","Check timing device or bell","Remind members of the weekly presentation theme","Ensure members make specific referral asks","Stop speakers who exceed the 30-second limit"],
+   assignees:{primary:"T N Rohith",secondary:null,support:["Sunil Kumar Reddy"]}},
+  {id:"pio",title:"PIO Coordinator (Pre-Induction)",team:"President's Team",icon:"🚪",minComposite:60,
+   personalities:["Connector","Teacher"],
+   weights:{communication:3,bni:3,influence:2,reliability:2,energy:1,referrals:1},
+   responsibilities:["Meet approved applicants before induction","Explain membership expectations and costs","Collect member bio and photo","Prepare the New Member Kit","Schedule the induction date"],
+   assignees:{primary:"Mohammed Murtaza",secondary:null,support:[]}},
+  {id:"branding_media",title:"Branding & Media",team:"Secretary-Treasurer Team",icon:"📸",minComposite:42,
+   personalities:["Creative","Influencer"],
+   weights:{energy:3,communication:2,bni:1,reliability:2,influence:2,referrals:2},
+   responsibilities:["Take photos during meetings and events","Post updates on Facebook, LinkedIn, and Instagram","Create recognition posts or flyers for members","Ensure proper use of chapter branding","Promote member businesses through social media"],
+   assignees:{primary:"Mohammed Murtaza",secondary:null,support:[]}},
+  {id:"socials",title:"Socials Coordinator",team:"Secretary-Treasurer Team",icon:"🎉",minComposite:48,
+   personalities:["Connector","Creative"],
+   weights:{energy:3,communication:2,bni:1,reliability:2,influence:2,referrals:2},
+   responsibilities:["Poll members to finalise event dates","Identify and book venues for social gatherings","Collect event payments from members","Plan games and activities for events","Encourage maximum member participation"],
+   assignees:{primary:"Amrath Acharya",secondary:null,support:["Jagriti Agarwal"]}},
+  {id:"training",title:"Training Coordinator",team:"Secretary-Treasurer Team",icon:"🏋️",minComposite:48,
+   personalities:["Teacher","Organizer"],
+   weights:{bni:3,communication:2,reliability:3,energy:1,influence:1,referrals:2},
+   responsibilities:["Review the regional training calendar","Announce upcoming BNI workshops and events","Track member CEUs","Organise group participation in training programs","Ensure new members complete MSP training"],
+   assignees:{primary:"Poonam Singh",secondary:null,support:["Meghana Prabhu"]}},
+  {id:"go_green",title:"Go Green Coordinator",team:"Secretary-Treasurer Team",icon:"🟢",minComposite:65,
+   personalities:["Analytical","Connector"],
+   weights:{bni:3,reliability:2,referrals:2,influence:3,communication:1,energy:1},
+   responsibilities:["Analyse Traffic Light report weekly","Identify easy wins for Amber members","Explain the Power of One to struggling members","Celebrate Green members publicly","Coach Red and Grey members individually"],
+   assignees:{primary:"Bijith Bhaskar",secondary:null,support:["Shubham Tibrewala"]}},
+  {id:"feature_presentation",title:"Feature Presentation Coordinator",team:"Secretary-Treasurer Team",icon:"🌟",minComposite:55,
+   personalities:["Organizer","Teacher"],
+   weights:{communication:2,bni:3,reliability:3,energy:1,influence:2,referrals:1},
+   responsibilities:["Maintain the 8-week feature presentation schedule","Collect speaker bio sheet one week before presentation","Ensure door prize is arranged for the meeting","Guide speakers on choosing and structuring their 8-minute slot","Fill any gaps in the speaker schedule"],
+   assignees:{primary:"Anirban Pal",secondary:null,support:["Monica S"]}},
+  {id:"visitor_host",title:"Lead Visitor Host",team:"Secretary-Treasurer Team",icon:"👋",minComposite:50,
+   personalities:["Connector","Influencer"],
+   weights:{energy:3,communication:3,influence:2,reliability:1,bni:2,referrals:1},
+   responsibilities:["Arrive at the venue 30 minutes early","Set up the visitor table and name badges","Assign roles to greeting team members","Collect completed visitor information sheets","Conduct visitor orientation and explain meeting flow"],
+   assignees:{primary:"Shaik Tabassum",secondary:null,support:["Sadan Ram","Farhath Unnisa","Poorna Hari Prasad Sama"]}},
+  {id:"online_host",title:"Online Meeting Host",team:"Secretary-Treasurer Team",icon:"💻",minComposite:42,
+   personalities:["Organizer","Creative"],
+   weights:{reliability:3,communication:3,bni:2,energy:1,influence:1,referrals:2},
+   responsibilities:["Start the online meeting at least 15 minutes early","Manage breakout rooms during the meeting","Spotlight speakers when they present","Mute background noise or disruptions","Play music or manage transitions during breaks"],
+   assignees:{primary:null,secondary:null,support:[]}},
+];
+
+const PERSONALITY_DATA = {
+  Analytical:{icon:"📊",color:"#4ABCF5",desc:"Systems & data driven"},
+  Connector: {icon:"🔗",color:"#7CC96E",desc:"People & relationships"},
+  Teacher:   {icon:"🎓",color:"#C97CC9",desc:"Knowledge & mentoring"},
+  Organizer: {icon:"📋",color:"#F5A623",desc:"Structure & execution"},
+  Creative:  {icon:"🎨",color:"#F5614A",desc:"Visual & creative output"},
+  Influencer:{icon:"✨",color:"#D4A843",desc:"Culture & inspiration"},
+};
+
+// ── PALMS SCORING ─────────────────────────────────────────────────────────────
+function scorePalms(palms) {
+  if (!palms) return null;
+  let score = 0;
+  // Attendance % → 0–20
+  const att = parseFloat(palms.attendancePct) || 0;
+  if (att >= 90) score += 20;
+  else if (att >= 80) score += 15;
+  else if (att >= 70) score += 10;
+  else if (att >= 60) score += 5;
+  // Referrals given → 0–12
+  const ref = parseInt(palms.referralsGiven) || 0;
+  if (ref >= 12) score += 12;
+  else if (ref >= 8) score += 9;
+  else if (ref >= 4) score += 6;
+  else if (ref >= 1) score += 3;
+  // TYFCB received → 0–8 (in ₹ thousands)
+  const ty = parseFloat(palms.tyfcb) || 0;
+  if (ty >= 500) score += 8;
+  else if (ty >= 200) score += 6;
+  else if (ty >= 50) score += 4;
+  else if (ty > 0) score += 2;
+  // 1-2-1 meetings → 0–6
+  const m = parseInt(palms.meetings121) || 0;
+  if (m >= 10) score += 6;
+  else if (m >= 6) score += 4;
+  else if (m >= 3) score += 2;
+  // Visitors invited → 0–4
+  const vis = parseInt(palms.visitors) || 0;
+  if (vis >= 4) score += 4;
+  else if (vis >= 2) score += 2;
+  else if (vis >= 1) score += 1;
+  return score; // max 50
+}
+
+// ── COMPOSITE SCORING ─────────────────────────────────────────────────────────
+function computeComposite(quizTotal, palmsScore) {
+  // Quiz: 12–85 range → normalize to 0–50
+  const quizNorm = Math.round(((quizTotal - 12) / (85 - 12)) * 50);
+  if (palmsScore === null) return { composite: quizNorm * 2, quizNorm, palmsScore: null, haspalms: false };
+  return { composite: Math.min(100, quizNorm + palmsScore), quizNorm, palmsScore, hasPalms: true };
+}
+
+function computeResult(answers, riskAnswers, palmsData, memberName) {
+  const scores = { reliability:0, bni:0, referrals:0, influence:0, communication:0, energy:0 };
+  const pVotes = {};
+  let quizTotal = 0;
+  QUIZ_QUESTIONS.forEach(q => {
+    const a = answers[q.id];
+    if (!a) return;
+    if (q.indicator === "personality") {
+      pVotes[a.personality] = (pVotes[a.personality] || 0) + 1;
+    } else {
+      scores[q.indicator] += a.score;
+      quizTotal += a.score;
+    }
+  });
+  const personality = (Object.entries(pVotes).sort((a,b) => b[1]-a[1])[0] ? Object.entries(pVotes).sort((a,b) => b[1]-a[1])[0][0] : "Connector");
+  const risks = Object.values(riskAnswers).filter(Boolean).length;
+  const palms = (palmsData ? palmsData[memberName] : null) || null;
+  const palmsScore = scorePalms(palms);
+  const { composite, quizNorm, hasPalms } = computeComposite(quizTotal, palmsScore);
+  let category, categoryColor;
+  if (composite >= 80) { category = "Strategic Leader"; categoryColor = "#D4A843"; }
+  else if (composite >= 62) { category = "Operational Leader"; categoryColor = "#4ABCF5"; }
+  else if (composite >= 45) { category = "Emerging Leader"; categoryColor = "#7CC96E"; }
+  else { category = "Active Member"; categoryColor = "#888"; }
+  const roleFits = computeRoleFit(scores, personality, composite, risks);
+  return { quizTotal, quizNorm, scores, personality, category, categoryColor, risks, composite, palmsScore, palms, hasPalms, roleFits };
+}
+
+function computeRoleFit(scores, personality, composite, risks) {
+  return ROLES.map(role => {
+    const totalW = Object.values(role.weights).reduce((s,v) => s+v, 0);
+    const weighted = Object.entries(role.weights).reduce((s,[ind,w]) => s+(scores[ind]||0)*w, 0);
+    let fit = (weighted / (totalW * 5)) * 100;
+    if (role.personalities[0] === personality) fit *= 1.18;
+    else if (role.personalities[1] === personality) fit *= 1.08;
+    if (risks >= 2) fit *= 0.65;
+    if (composite < role.minComposite) fit *= 0.70;
+    return { ...role, fitPct: Math.min(99, Math.round(fit)), belowMin: composite < role.minComposite, teamColor: TEAM_COLORS[role.team] };
+  }).sort((a,b) => b.fitPct - a.fitPct);
+}
+
+// ── CSV PARSER ────────────────────────────────────────────────────────────────
+function parsePalmsCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return { error: "CSV appears empty or has no data rows." };
+  const headers = lines[0].split(",").map(h => h.replace(/"/g,"").trim().toLowerCase());
+
+  const findCol = (...keys) => {
+    for (const k of keys) {
+      const idx = headers.findIndex(h => h.includes(k));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const nameCol = findCol("name","member");
+  const attCol = findCol("attendance %","att %","attend %","attendance_pct","att_pct","attendance percent");
+  const refCol = findCol("referral","ref given","referrals given","ref_given");
+  const tyCol = findCol("tyfcb","ty fcb","thank you","closed business","tyfcb received");
+  const m121Col = findCol("1-2-1","1 2 1","one to one","1to1","121","meetings");
+  const visCol = findCol("visitor","vis brought","visitors brought","vis_brought");
+
+  if (nameCol < 0) return { error: "Cannot find a Name or Member column. Please check your CSV export." };
+
+  const data = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map(c => c.replace(/"/g,"").trim());
+    const name = cols[nameCol];
+    if (!name) continue;
+    const matched = MEMBERS.find(m => m.toLowerCase() === name.toLowerCase() ||
+      name.toLowerCase().includes(m.split(" ")[0].toLowerCase()));
+    if (!matched) continue;
+    data[matched] = {
+      attendancePct: attCol >= 0 ? (cols[attCol] ? cols[attCol].replace("%","") : null) : null,
+      referralsGiven: refCol >= 0 ? cols[refCol] : null,
+      tyfcb: tyCol >= 0 ? (cols[tyCol] ? cols[tyCol].replace(/[₹,]/g,"") : null) : null,
+      meetings121: m121Col >= 0 ? cols[m121Col] : null,
+      visitors: visCol >= 0 ? cols[visCol] : null,
+      raw: cols,
+    };
+  }
+  return { data, headers, memberCount: Object.keys(data).length };
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+const compositeColor = (c) => c >= 80 ? "#D4A843" : c >= 62 ? "#4ABCF5" : c >= 45 ? "#7CC96E" : "#888";
+const fitColor = (p) => p >= 75 ? "#D4A843" : p >= 55 ? "#4ABCF5" : p >= 40 ? "#7CC96E" : "#F5614A";
+
+// ── SMALL COMPONENTS ─────────────────────────────────────────────────────────
+function ProgressBar({ current, total }) {
+  const pct = Math.round((current / total) * 100);
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6, fontSize:11, color:"#5A7090", fontFamily:"monospace", letterSpacing:1 }}>
+        <span>QUESTION {current} OF {total}</span><span>{pct}%</span>
+      </div>
+      <div style={{ height:3, background:"#1E2535", borderRadius:2 }}>
+        <div style={{ height:"100%", width:`${pct}%`, background:"linear-gradient(90deg,#C9952C,#E8B84B)", borderRadius:2, transition:"width 0.4s ease" }}/>
+      </div>
+    </div>
+  );
+}
+
+function CompositeGauge({ composite, quizNorm, palmsScore }) {
+  const color = compositeColor(composite);
+  const r = 52, cx = 60, cy = 60, circ = 2 * Math.PI * r;
+  const dash = (composite / 100) * circ;
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center" }}>
+      <svg width={120} height={120} style={{ transform:"rotate(-90deg)" }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1E2535" strokeWidth={8}/>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={8}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{ transition:"stroke-dasharray 1s ease" }}/>
+      </svg>
+      <div style={{ marginTop:-70, marginBottom:50, textAlign:"center", pointerEvents:"none" }}>
+        <div style={{ fontSize:26, fontWeight:900, color, fontFamily:"Georgia,serif" }}>{composite}</div>
+        <div style={{ fontSize:9, color:"#555", fontFamily:"monospace" }}>/ 100</div>
+      </div>
+    </div>
+  );
+}
+
+function RadarChart({ scores }) {
+  const keys = ["reliability","bni","referrals","influence","communication","energy"];
+  const labels = ["Reliability","BNI","Referrals","Influence","Comms","Energy"];
+  const n = keys.length, cx = 100, cy = 100, r = 68;
+  const pts = keys.map((k,i) => {
+    const a = (i/n)*2*Math.PI-Math.PI/2, v = (scores[k]||0)/5;
+    return { x: cx+r*v*Math.cos(a), y: cy+r*v*Math.sin(a) };
+  });
+  const poly = pts.map(p=>`${p.x},${p.y}`).join(" ");
+  return (
+    <svg width={200} height={200} viewBox="0 0 200 200">
+      {[0.25,0.5,0.75,1].map(lvl => {
+        const gp = keys.map((_,i)=>{const a=(i/n)*2*Math.PI-Math.PI/2;return`${cx+r*lvl*Math.cos(a)},${cy+r*lvl*Math.sin(a)}`;}).join(" ");
+        return <polygon key={lvl} points={gp} fill="none" stroke="#1A2535" strokeWidth={1}/>;
+      })}
+      {keys.map((_,i)=>{const a=(i/n)*2*Math.PI-Math.PI/2;return<line key={i} x1={cx} y1={cy} x2={cx+r*Math.cos(a)} y2={cy+r*Math.sin(a)} stroke="#1A2535" strokeWidth={1}/>;
+      })}
+      <polygon points={poly} fill="rgba(201,149,44,0.18)" stroke="#D4A843" strokeWidth={2}/>
+      {labels.map((lbl,i)=>{const a=(i/n)*2*Math.PI-Math.PI/2;return<text key={i} x={cx+(r+18)*Math.cos(a)} y={cy+(r+18)*Math.sin(a)} textAnchor="middle" dominantBaseline="middle" fill="#5A7090" fontSize={8} fontFamily="monospace">{lbl}</text>;
+      })}
+    </svg>
+  );
+}
+
+// ── WELCOME SCREEN ────────────────────────────────────────────────────────────
+function WelcomeScreen({ onStart, onAdmin }) {
+  const [name, setName] = useState("");
+  return (
+    <div style={{ minHeight:"100vh", background:"#080D1A", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ maxWidth:480, width:"100%", textAlign:"center" }}>
+        <div style={{ marginBottom:14, display:"inline-block", padding:"5px 16px", background:"#0F1829", border:"1px solid #1E2D4A", borderRadius:20, fontSize:10, color:"#D4A843", letterSpacing:3, fontFamily:"monospace" }}>
+          BNI MIRACLE · CHAPTER INTELLIGENCE
+        </div>
+        <h1 style={{ fontSize:34, fontWeight:900, color:"#F0E6D3", lineHeight:1.15, marginBottom:10, fontFamily:"Georgia,serif" }}>
+          Your Chapter Role<br/><span style={{ color:"#D4A843" }}>Pulse Check</span>
+        </h1>
+        <p style={{ color:"#7A8BA3", fontSize:14, lineHeight:1.7, marginBottom:16 }}>
+          A 7-minute assessment that maps your leadership profile to the role where you'll generate maximum impact — for yourself and the chapter.
+        </p>
+        <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:14, padding:18, marginBottom:20, textAlign:"left" }}>
+          <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:12 }}>WHAT YOU WILL SEE IN YOUR RESULTS</div>
+          {[
+            ["📊","Your composite leadership score","Based on your answers AND your actual chapter behavioral data from PALMS"],
+            ["🎯","Your role fit percentages","Ranked across all 23 chapter roles — so you can see exactly where you score highest"],
+            ["📋","Your behavioral data breakdown","Attendance, referrals, TYFCB, 1-2-1s — the same data the leadership team uses"],
+            ["🧠","Your personality type","Your natural operating mode, and which roles it aligns with"],
+          ].map(([icon,title,sub]) => (
+            <div key={title} style={{ display:"flex", gap:10, marginBottom:12, alignItems:"flex-start" }}>
+              <span style={{ fontSize:18, flexShrink:0 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:"#D4E3F5", marginBottom:2 }}>{title}</div>
+                <div style={{ fontSize:11, color:"#4A6070", lineHeight:1.5 }}>{sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ background:"#0A1020", border:"1px solid #1A2840", borderRadius:14, padding:16, marginBottom:20, textAlign:"left" }}>
+          <div style={{ fontSize:10, color:"#5A7090", fontFamily:"monospace", letterSpacing:2, marginBottom:8 }}>WHY THIS IS IN YOUR INTEREST</div>
+          <p style={{ fontSize:12, color:"#5A7090", lineHeight:1.7, margin:0 }}>
+            Members placed in well-matched roles pass more referrals, receive more TYFCB, and stay in chapters longer. The right role feels like leverage, not obligation. This diagnostic finds that role for you — based on evidence, not guesswork.
+          </p>
+        </div>
+        <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:14, padding:18, marginBottom:16, textAlign:"left" }}>
+          <div style={{ fontSize:11, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:10 }}>SELECT YOUR NAME</div>
+          <div style={{ position:"relative" }}>
+            <select value={name} onChange={e => setName(e.target.value)}
+              style={{ width:"100%", padding:"13px 40px 13px 16px", background:"#080D1A", border:"1px solid #1E2D4A", borderRadius:10, color:name?"#F0E6D3":"#5A7090", fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit", cursor:"pointer", appearance:"none" }}>
+              <option value="">— Choose your name —</option>
+              {MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <div style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#5A7090" }}>▼</div>
+          </div>
+        </div>
+        <button onClick={() => name && onStart(name)} disabled={!name}
+          style={{ width:"100%", padding:"14px", background:name?"linear-gradient(135deg,#C9952C,#E8B84B)":"#1E2535", border:"none", borderRadius:12, color:name?"#0A0D14":"#3A4A5A", fontSize:14, fontWeight:700, cursor:name?"pointer":"default", letterSpacing:1, fontFamily:"inherit", transition:"all 0.2s", marginBottom:10 }}>
+          START MY PULSE CHECK →
+        </button>
+        <button onClick={onAdmin} style={{ width:"100%", padding:"11px", background:"transparent", border:"1px solid #1E2D4A", borderRadius:12, color:"#5A7090", fontSize:11, cursor:"pointer", letterSpacing:1, fontFamily:"monospace" }}>
+          LEADERSHIP TEAM DASHBOARD →
+        </button>
+        <p style={{ color:"#2A3A4A", fontSize:11, marginTop:12 }}>Takes about 7 minutes · Answers are confidential to the leadership team</p>
+      </div>
+    </div>
+  );
+}
+
+// ── QUIZ SCREEN ───────────────────────────────────────────────────────────────
+function QuizScreen({ memberName, onComplete }) {
+  const [currentQ, setCurrentQ] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [selected, setSelected] = useState(null);
+  const [phase, setPhase] = useState("quiz");
+  const [riskAnswers, setRiskAnswers] = useState({});
+  const [fade, setFade] = useState(true);
+  const q = QUIZ_QUESTIONS[currentQ];
+  const isP = q && q.type === "personality";
+  const total = QUIZ_QUESTIONS.length;
+
+  function advance() {
+    const newA = { ...answers, [q.id]: selected };
+    setAnswers(newA);
+    if (currentQ + 1 < total) {
+      setFade(false);
+      setTimeout(() => { setCurrentQ(currentQ+1); setSelected(null); setFade(true); }, 180);
+    } else {
+      setPhase("risk"); setSelected(null);
+    }
+  }
+
+  if (phase === "risk") {
+    const done = Object.keys(riskAnswers).length === RISK_QUESTIONS.length;
+    return (
+      <div style={{ minHeight:"100vh", background:"#080D1A", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+        <div style={{ maxWidth:520, width:"100%" }}>
+          <div style={{ marginBottom:6, fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2 }}>CAPACITY CHECK · FINAL SECTION</div>
+          <h2 style={{ fontSize:20, fontWeight:800, color:"#F0E6D3", marginBottom:6, fontFamily:"Georgia,serif" }}>Almost done, {memberName.split(" ")[0]}</h2>
+          <p style={{ color:"#5A7090", fontSize:13, marginBottom:24 }}>The leadership team uses this to ensure no one is assigned a role that conflicts with their current bandwidth. Please answer honestly.</p>
+          {RISK_QUESTIONS.map(rq => (
+            <div key={rq.id} style={{ background:"#0D1526", border:`1px solid ${riskAnswers[rq.id]!==undefined?(riskAnswers[rq.id]?"#4A1A1A":"#0A2A1A"):"#1A2840"}`, borderRadius:12, padding:18, marginBottom:10 }}>
+              <p style={{ color:"#C0D0E0", fontSize:13, marginBottom:12, lineHeight:1.6 }}>{rq.text}</p>
+              <div style={{ display:"flex", gap:10 }}>
+                {["Yes","No"].map(opt => {
+                  const val = opt === "Yes", chosen = riskAnswers[rq.id] === val;
+                  return (<button key={opt} onClick={() => setRiskAnswers({...riskAnswers,[rq.id]:val})}
+                    style={{ padding:"8px 24px", borderRadius:8, border:`1px solid ${chosen?(val?"#6A2A2A":"#1A4A2A"):"#1E2D4A"}`, background:chosen?(val?"#1A0808":"#081A08"):"#080D1A", color:chosen?(val?"#F5A0A0":"#7CC96E"):"#5A7090", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit" }}>{opt}</button>);
+                })}
+              </div>
+            </div>
+          ))}
+          <button disabled={!done} onClick={() => onComplete(answers, riskAnswers)}
+            style={{ width:"100%", marginTop:16, padding:"14px", background:done?"linear-gradient(135deg,#C9952C,#E8B84B)":"#1E2535", border:"none", borderRadius:12, color:done?"#0A0D14":"#3A4A5A", fontSize:14, fontWeight:700, cursor:done?"pointer":"default", fontFamily:"inherit", letterSpacing:1 }}>
+            SEE MY RESULTS →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#080D1A", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ maxWidth:580, width:"100%", opacity:fade?1:0, transition:"opacity 0.18s" }}>
+        <ProgressBar current={currentQ+1} total={total}/>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+          <span style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, background:"#1A1408", padding:"3px 10px", borderRadius:20, border:"1px solid #2A2010" }}>{q.tag}</span>
+          {q.type === "forced_choice" && <span style={{ fontSize:9, color:"#3A5070", fontFamily:"monospace", letterSpacing:1 }}>FORCED CHOICE — pick the most accurate, not the best-sounding</span>}
+        </div>
+        <h2 style={{ fontSize:18, fontWeight:700, color:"#F0E6D3", margin:"0 0 22px", lineHeight:1.55, fontFamily:"Georgia,serif" }}>{q.question}</h2>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {q.options.map((opt, i) => {
+            const chosen = isP ? (selected && selected.personality === opt.personality) : (selected && selected.score === opt.score && selected.text === opt.text);
+            return (
+              <button key={i} onClick={() => setSelected(opt)}
+                style={{ padding:"15px 18px", borderRadius:12, textAlign:"left", border:`1px solid ${chosen?"#D4A843":"#1E2D4A"}`, background:chosen?"#1A1408":"#0D1526", color:chosen?"#F0E6D3":"#8A9DB5", cursor:"pointer", fontSize:13, lineHeight:1.5, fontFamily:"inherit", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:18, height:18, borderRadius:"50%", flexShrink:0, border:`2px solid ${chosen?"#D4A843":"#2A3A50"}`, background:chosen?"#D4A843":"transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {chosen && <div style={{ width:6, height:6, borderRadius:"50%", background:"#080D1A" }}/>}
+                </div>
+                {isP && <span style={{ fontSize:15 }}>{["📊","🔗","🎓","📋","🎨","✨"][i]}</span>}
+                {opt.text}
+              </button>
+            );
+          })}
+        </div>
+        <button disabled={!selected} onClick={advance}
+          style={{ width:"100%", marginTop:22, padding:"13px", background:selected?"linear-gradient(135deg,#C9952C,#E8B84B)":"#1E2535", border:"none", borderRadius:12, color:selected?"#0A0D14":"#3A4A5A", fontSize:13, fontWeight:700, cursor:selected?"pointer":"default", fontFamily:"inherit", letterSpacing:1, transition:"all 0.2s" }}>
+          {currentQ+1 === total ? "FINAL SECTION →" : "NEXT →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── MEMBER RESULTS SCREEN ─────────────────────────────────────────────────────
+function ResultsScreen({ memberName, result, onViewDashboard, onRetake }) {
+  const { quizNorm, scores, personality, category, categoryColor, risks, composite, palmsScore, palms, hasPalms, roleFits } = result;
+  const pData = PERSONALITY_DATA[personality];
+  const top5 = roleFits.slice(0, 5);
+  const [expanded, setExpanded] = useState(null);
+  const iLabels = { reliability:"Reliability", bni:"BNI System", referrals:"Referrals", influence:"Influence", communication:"Communication", energy:"Energy" };
+  const currentRoles = ROLES.filter(r => [r.assignees.primary, r.assignees.secondary, ...(r.assignees.support||[])].includes(memberName));
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#080D1A", padding:"24px 16px" }}>
+      <div style={{ maxWidth:640, margin:"0 auto" }}>
+
+        {/* Header */}
+        <div style={{ textAlign:"center", marginBottom:22 }}>
+          <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:3, marginBottom:8 }}>YOUR LEADERSHIP PROFILE</div>
+          <h1 style={{ fontSize:26, fontWeight:900, color:"#F0E6D3", fontFamily:"Georgia,serif", marginBottom:4 }}>{memberName}</h1>
+          {currentRoles.length > 0 && <div style={{ fontSize:12, color:"#5A7090" }}>Current role{currentRoles.length>1?"s":""}: {currentRoles.map(r=>r.title).join(", ")}</div>}
+        </div>
+
+        {/* Composite score */}
+        <div style={{ background:"#0D1526", border:`1px solid ${categoryColor}40`, borderRadius:16, padding:22, marginBottom:14, display:"flex", gap:16, alignItems:"center" }}>
+          <CompositeGauge composite={composite} quizNorm={quizNorm} palmsScore={palmsScore}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:10, color:"#5A7090", fontFamily:"monospace", letterSpacing:2, marginBottom:4 }}>COMPOSITE LEADERSHIP SCORE</div>
+            <div style={{ fontSize:20, fontWeight:800, color:categoryColor, fontFamily:"Georgia,serif", marginBottom:10 }}>{category}</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              <div style={{ background:"#080D1A", borderRadius:8, padding:"8px 12px", border:"1px solid #1A2840" }}>
+                <div style={{ fontSize:9, color:"#3A5070", fontFamily:"monospace", marginBottom:3 }}>QUIZ SCORE (50%)</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#4ABCF5" }}>{quizNorm}<span style={{ fontSize:10, color:"#3A5070" }}>/50</span></div>
+              </div>
+              <div style={{ background:"#080D1A", borderRadius:8, padding:"8px 12px", border:`1px solid ${hasPalms?"#1A3A1A":"#1A2840"}` }}>
+                <div style={{ fontSize:9, color:"#3A5070", fontFamily:"monospace", marginBottom:3 }}>PALMS SCORE (50%)</div>
+                {hasPalms
+                  ? <div style={{ fontSize:16, fontWeight:800, color:"#7CC96E" }}>{palmsScore}<span style={{ fontSize:10, color:"#3A5070" }}>/50</span></div>
+                  : <div style={{ fontSize:11, color:"#3A5070", fontStyle:"italic" }}>Pending CSV upload</div>}
+              </div>
+            </div>
+            {risks >= 2 && <div style={{ marginTop:10, fontSize:11, color:"#F5A0A0", background:"#1A0808", padding:"4px 12px", borderRadius:20, display:"inline-block", border:"1px solid #3A1A1A" }}>⚠ {risks} capacity flags — leadership team will discuss</div>}
+          </div>
+        </div>
+
+        {/* PALMS Behavioral Data */}
+        {hasPalms && palms && (
+          <div style={{ background:"#0D1526", border:"1px solid #1A3A1A", borderRadius:16, padding:20, marginBottom:14 }}>
+            <div style={{ fontSize:10, color:"#7CC96E", fontFamily:"monospace", letterSpacing:2, marginBottom:14 }}>YOUR PALMS DATA · LAST 3 MONTHS</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+              {[
+                {label:"Attendance",value:palms.attendancePct?`${palms.attendancePct}%`:"–",icon:"📅",max:100,val:parseFloat(palms.attendancePct)||0},
+                {label:"Referrals Given",value:palms.referralsGiven||"–",icon:"🔗",max:12,val:parseInt(palms.referralsGiven)||0},
+                {label:"TYFCB (₹k)",value:palms.tyfcb||"–",icon:"💰",max:500,val:parseFloat(palms.tyfcb)||0},
+                {label:"1-2-1 Meetings",value:palms.meetings121||"–",icon:"🤝",max:12,val:parseInt(palms.meetings121)||0},
+                {label:"Visitors Invited",value:palms.visitors||"–",icon:"👋",max:6,val:parseInt(palms.visitors)||0},
+              ].map(item => (
+                <div key={item.label} style={{ background:"#080D1A", borderRadius:10, padding:"10px 8px", textAlign:"center", border:"1px solid #1A2840" }}>
+                  <div style={{ fontSize:18, marginBottom:4 }}>{item.icon}</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:"#7CC96E" }}>{item.value}</div>
+                  <div style={{ fontSize:9, color:"#3A5070", fontFamily:"monospace", lineHeight:1.3 }}>{item.label}</div>
+                  <div style={{ height:3, background:"#1E2535", borderRadius:2, marginTop:6 }}>
+                    <div style={{ height:"100%", width:`${Math.min(100,(item.val/item.max)*100)}%`, background:"#7CC96E", borderRadius:2 }}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!hasPalms && (
+          <div style={{ background:"#0A1020", border:"1px dashed #1A2840", borderRadius:14, padding:16, marginBottom:14, textAlign:"center" }}>
+            <div style={{ fontSize:12, color:"#3A5070" }}>📋 Your PALMS behavioral data will appear here once the Secretary-Treasurer uploads the weekly CSV. Your composite score will update automatically.</div>
+          </div>
+        )}
+
+        {/* Radar + Breakdown */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+          <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:16, display:"flex", flexDirection:"column", alignItems:"center" }}>
+            <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:8, alignSelf:"flex-start" }}>QUIZ SCORE PROFILE</div>
+            <RadarChart scores={scores}/>
+          </div>
+          <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:16 }}>
+            <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:12 }}>INDICATOR BREAKDOWN</div>
+            {Object.entries(scores).map(([k,v]) => (
+              <div key={k} style={{ marginBottom:8 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, fontSize:10, color:"#5A7090" }}>
+                  <span>{iLabels[k]}</span><span style={{ color:"#D4A843" }}>{v}</span>
+                </div>
+                <div style={{ height:4, background:"#1E2535", borderRadius:2 }}>
+                  <div style={{ height:"100%", width:`${(v/5)*100}%`, background:"linear-gradient(90deg,#C9952C,#E8B84B)", borderRadius:2 }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Personality */}
+        <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:18, marginBottom:14 }}>
+          <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:12 }}>PERSONALITY TYPE</div>
+          <div style={{ display:"flex", gap:14, alignItems:"center" }}>
+            <div style={{ fontSize:36 }}>{pData.icon}</div>
+            <div>
+              <div style={{ fontSize:18, fontWeight:800, color:pData.color, fontFamily:"Georgia,serif" }}>{personality}</div>
+              <div style={{ fontSize:12, color:"#5A7090" }}>{pData.desc}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Role Fit */}
+        <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:18, marginBottom:14 }}>
+          <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:6 }}>YOUR ROLE FIT SCORES</div>
+          <div style={{ fontSize:11, color:"#3A5070", marginBottom:16 }}>Calculated from your composite score, indicator profile, and personality type. Tap any role to see responsibilities and current assignees.</div>
+          {top5.map((role, i) => {
+            const isOpen = expanded === role.id;
+            const isCurrent = currentRoles.some(r => r.id === role.id);
+            const tc = TEAM_COLORS[role.team];
+            return (
+              <div key={role.id} style={{ marginBottom:10, border:`1px solid ${isOpen?tc+"60":"#1A2840"}`, borderRadius:12, overflow:"hidden" }}>
+                <div onClick={() => setExpanded(isOpen?null:role.id)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:12, background:isOpen?"#0F1E30":"transparent" }}>
+                  <div style={{ fontSize:10, fontWeight:900, color:"#2A3A4A", width:16 }}>{i+1}</div>
+                  <span style={{ fontSize:18 }}>{role.icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:13, fontWeight:700, color:"#D4E3F5" }}>{role.title}</span>
+                      {isCurrent && <span style={{ fontSize:9, color:tc, background:tc+"15", padding:"2px 8px", borderRadius:10, border:`1px solid ${tc}40` }}>CURRENT ROLE</span>}
+                      {role.belowMin && <span style={{ fontSize:9, color:"#F5A623", background:"#1A1208", padding:"2px 8px", borderRadius:10, border:"1px solid #2A2010" }}>STRETCH</span>}
+                    </div>
+                    <div style={{ fontSize:9, color:"#2A4060", fontFamily:"monospace" }}>{role.team}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:18, fontWeight:900, color:fitColor(role.fitPct) }}>{role.fitPct}%</div>
+                    <div style={{ height:4, width:50, background:"#1E2535", borderRadius:2, marginTop:3, marginLeft:"auto" }}>
+                      <div style={{ height:"100%", width:`${role.fitPct}%`, background:fitColor(role.fitPct), borderRadius:2 }}/>
+                    </div>
+                  </div>
+                </div>
+                {isOpen && (
+                  <div style={{ padding:"0 16px 14px", background:"#080F1C" }}>
+                    <div style={{ fontSize:10, color:"#2A4060", fontFamily:"monospace", marginBottom:8 }}>RESPONSIBILITIES</div>
+                    {role.responsibilities.map((resp,j) => (
+                      <div key={j} style={{ fontSize:12, color:"#5A7A90", padding:"3px 0", display:"flex", gap:8 }}>
+                        <span style={{ color:tc, flexShrink:0 }}>·</span>{resp}
+                      </div>
+                    ))}
+                    <div style={{ marginTop:10, fontSize:10, color:"#2A4060", fontFamily:"monospace", marginBottom:8 }}>CURRENT ASSIGNEES</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                      {[role.assignees.primary, role.assignees.secondary, ...(role.assignees.support||[])].filter(Boolean).map(n => (
+                        <span key={n} style={{ fontSize:11, color:n===memberName?"#D4A843":"#5A7090", background:n===memberName?"#1A1408":"#0A0F1A", padding:"3px 10px", borderRadius:20, border:`1px solid ${n===memberName?"#3A2A10":"#1E2D4A"}` }}>{n}</span>
+                      ))}
+                      {!role.assignees.primary && <span style={{ fontSize:11, color:"#F5614A", fontStyle:"italic" }}>Vacant</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          <button onClick={onViewDashboard} style={{ padding:"13px", background:"linear-gradient(135deg,#C9952C,#E8B84B)", border:"none", borderRadius:12, color:"#0A0D14", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:1, fontFamily:"inherit" }}>
+            CHAPTER DASHBOARD →
+          </button>
+          <button onClick={onRetake} style={{ padding:"13px", background:"transparent", border:"1px solid #1E2D4A", borderRadius:12, color:"#5A7090", fontSize:12, cursor:"pointer", fontFamily:"monospace", letterSpacing:1 }}>
+            ← RETAKE
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ADMIN DASHBOARD ───────────────────────────────────────────────────────────
+function AdminDashboard({ assessedMembers, palmsData, assignments: sheetAssignments, syncStatus, onUploadPalms, onSaveAssignment, onSync, onBack }) {
+  const [tab, setTab] = useState("roles");
+  const [assignments, setAssignments] = useState(sheetAssignments || {});
+  const [deliberation, setDeliberation] = useState({});
+  const [pasteText, setPasteText] = useState("");
+  const [pasteStatus, setPasteStatus] = useState("");
+  const [pasteMsg, setPasteMsg] = useState("");
+  const [uploadMethod, setUploadMethod] = useState("file");
+  useEffect(() => { if (sheetAssignments) setAssignments(prev => ({...sheetAssignments,...prev})); }, [sheetAssignments]);
+  const teams = ["VP Team","President's Team","Secretary-Treasurer Team"];
+  const assessed = Object.entries(assessedMembers);
+
+  function processCSVText(text) {
+    const result = parsePalmsCSV(text);
+    if (result.error) {
+      setPasteStatus("error"); setPasteMsg("Parse error: " + result.error);
+    } else {
+      onUploadPalms(result.data);
+      setPasteStatus("ok");
+      setPasteMsg("✓ PALMS data loaded for " + result.memberCount + " members. Composite scores updated.");
+    }
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => processCSVText(ev.target.result);
+    reader.readAsText(file);
+  }
+
+  function handlePasteSubmit() {
+    if (!pasteText.trim()) { setPasteStatus("error"); setPasteMsg("Please paste CSV text first."); return; }
+    processCSVText(pasteText);
+  }
+
+  const getAsmFit = (name, roleId) => {
+    const m = assessedMembers[name];
+    if (!m) return null;
+    return m.roleFits ? m.roleFits.find(r => r.id === roleId) : null;
+  };
+
+  const gaps = ROLES.filter(role => {
+    if (!role.assignees.primary) return true;
+    const allA = [role.assignees.primary, role.assignees.secondary, ...(role.assignees.support||[])].filter(Boolean);
+    const anyAssessed = allA.some(n => assessedMembers[n]);
+    if (!anyAssessed) return false;
+    const bestFit = allA.reduce((best,n) => {
+      const m = assessedMembers[n];
+      if (!m) return best;
+      const rf = m.roleFits ? m.roleFits.find(r => r.id === role.id) : null;
+      return rf && rf.fitPct > best ? rf.fitPct : best;
+    }, 0);
+    return bestFit < 45;
+  });
+
+  const palmsLoaded = Object.keys(palmsData).length > 0;
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#080D1A", padding:"22px 14px" }}>
+      <div style={{ maxWidth:820, margin:"0 auto" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:18, flexWrap:"wrap", gap:10 }}>
+          <div>
+            <div style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace", letterSpacing:3, marginBottom:3 }}>BNI MIRACLE · LEADERSHIP TEAM ONLY</div>
+            <h1 style={{ fontSize:18, fontWeight:900, color:"#F0E6D3", fontFamily:"Georgia,serif" }}>Chapter Selection Dashboard</h1>
+          </div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+            {sheetsAPI.configured() && (
+              <button onClick={onSync} title="Sync from Google Sheets"
+                style={{ padding:"7px 11px", borderRadius:8, border:"1px solid #1A3A2A", background:"#0A1A0A", color:syncStatus==="syncing"?"#F5A623":syncStatus==="synced"?"#7CC96E":syncStatus==="error"?"#F5614A":"#3A5070", fontSize:9, cursor:"pointer", fontFamily:"monospace", letterSpacing:1 }}>
+                {syncStatus==="syncing"?"⟳ SYNCING...":syncStatus==="synced"?"✓ SYNCED":syncStatus==="error"?"⚠ SYNC ERR":"⟳ SYNC"}
+              </button>
+            )}
+            {!sheetsAPI.configured() && (
+              <span style={{ fontSize:9, color:"#2A3A4A", fontFamily:"monospace", padding:"7px 10px" }}>LOCAL MODE</span>
+            )}
+            {[["roles","Role Map"],["members","Members"],["gaps","Gaps"],["assign","Assignments"],["upload","PALMS Upload"]].map(([k,l]) => (
+              <button key={k} onClick={() => setTab(k)}
+                style={{ padding:"7px 11px", borderRadius:8, border:`1px solid ${tab===k?"#D4A843":"#1E2D4A"}`, background:tab===k?"#1A1408":"#0D1526", color:tab===k?"#D4A843":"#5A7090", fontSize:9, fontWeight:600, cursor:"pointer", fontFamily:"monospace", letterSpacing:1 }}>{l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:16 }}>
+          {[
+            {label:"Members",value:38,color:"#D4A843"},
+            {label:"Assessed",value:assessed.length,color:"#4ABCF5"},
+            {label:"PALMS Loaded",value:Object.keys(palmsData).length,color:"#7CC96E"},
+            {label:"Vacant Roles",value:ROLES.filter(r=>!r.assignees.primary).length,color:"#F5614A"},
+            {label:"Gaps Flagged",value:gaps.length,color:"#F5A623"},
+          ].map(s => (
+            <div key={s.label} style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:10, padding:"12px 8px", textAlign:"center" }}>
+              <div style={{ fontSize:20, fontWeight:900, color:s.color, fontFamily:"Georgia,serif" }}>{s.value}</div>
+              <div style={{ fontSize:8, color:"#3A5070", fontFamily:"monospace", letterSpacing:1 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* PALMS UPLOAD TAB */}
+        {tab === "upload" && (
+          <div>
+            <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:22, marginBottom:14 }}>
+              <div style={{ fontSize:11, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:6 }}>PALMS DATA · WEEKLY UPDATE</div>
+              <div style={{ fontSize:12, color:"#3A5070", marginBottom:18, lineHeight:1.7 }}>
+                Export Summary PALMS from BNI Connect: <span style={{ color:"#D4A843" }}>Reports → Summary PALMS → Export CSV</span>. Set date range to last 3 months.
+              </div>
+
+              {/* Method Selector */}
+              <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+                {[["file","📂 Upload File"],["paste","📋 Paste CSV Text"],["sheets","🔗 Via Google Sheets"]].map(([k,l]) => (
+                  <button key={k} onClick={() => { setUploadMethod(k); setPasteStatus(""); setPasteMsg(""); }}
+                    style={{ flex:1, padding:"10px 6px", borderRadius:10, border:`1px solid ${uploadMethod===k?"#D4A843":"#1E2D4A"}`, background:uploadMethod===k?"#1A1408":"#080D1A", color:uploadMethod===k?"#D4A843":"#5A7090", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* METHOD 1: File Upload */}
+              {uploadMethod === "file" && (
+                <div>
+                  <div style={{ background:"#080D1A", border:"1px solid #1E2D4A", borderRadius:12, padding:20, textAlign:"center" }}>
+                    <div style={{ fontSize:28, marginBottom:8 }}>📂</div>
+                    <div style={{ fontSize:13, color:"#D4E3F5", marginBottom:4 }}>Select your exported CSV file</div>
+                    <div style={{ fontSize:11, color:"#3A5070", marginBottom:14 }}>Works in Chrome and Firefox on desktop. If button does not respond, use Paste method instead.</div>
+                    <label style={{ display:"inline-block", padding:"11px 28px", background:"linear-gradient(135deg,#C9952C,#E8B84B)", borderRadius:10, color:"#0A0D14", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:1 }}>
+                      CHOOSE CSV FILE
+                      <input type="file" accept=".csv,.CSV" onChange={handleFileChange} style={{ display:"none" }}/>
+                    </label>
+                  </div>
+                  {pasteStatus && (
+                    <div style={{ marginTop:12, padding:"10px 14px", background:pasteStatus==="ok"?"#0A1A0A":"#1A0808", border:`1px solid ${pasteStatus==="ok"?"#1A4A1A":"#4A1A1A"}`, borderRadius:10, fontSize:12, color:pasteStatus==="ok"?"#7CC96E":"#F5A0A0" }}>
+                      {pasteMsg}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* METHOD 2: Paste CSV Text */}
+              {uploadMethod === "paste" && (
+                <div>
+                  <div style={{ fontSize:12, color:"#5A7090", marginBottom:10, lineHeight:1.7 }}>
+                    Open your CSV file in Excel, Google Sheets, or Notepad. Select All (Ctrl+A) → Copy (Ctrl+C) → paste below.
+                  </div>
+                  <textarea
+                    value={pasteText}
+                    onChange={e => { setPasteText(e.target.value); setPasteStatus(""); }}
+                    placeholder="Name,Attendance %,Referrals Given,TYFCB,1-2-1 Meetings,Visitors&#10;Amrath Acharya,88%,7,120000,8,2&#10;..."
+                    style={{ width:"100%", minHeight:160, padding:"12px", background:"#080D1A", border:"1px solid #1E2D4A", borderRadius:10, color:"#D4E3F5", fontSize:11, fontFamily:"monospace", outline:"none", resize:"vertical", boxSizing:"border-box" }}
+                  />
+                  <button onClick={handlePasteSubmit}
+                    style={{ marginTop:10, width:"100%", padding:"12px", background:"linear-gradient(135deg,#C9952C,#E8B84B)", border:"none", borderRadius:10, color:"#0A0D14", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:1, fontFamily:"inherit" }}>
+                    PROCESS PASTED DATA →
+                  </button>
+                  {pasteStatus && (
+                    <div style={{ marginTop:10, padding:"10px 14px", background:pasteStatus==="ok"?"#0A1A0A":"#1A0808", border:`1px solid ${pasteStatus==="ok"?"#1A4A1A":"#4A1A1A"}`, borderRadius:10, fontSize:12, color:pasteStatus==="ok"?"#7CC96E":"#F5A0A0" }}>
+                      {pasteMsg}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* METHOD 3: Via Google Sheets */}
+              {uploadMethod === "sheets" && (
+                <div>
+                  <div style={{ background:"#080D1A", border:"1px solid #1E2D4A", borderRadius:12, padding:18 }}>
+                    <div style={{ fontSize:11, color:"#D4A843", fontFamily:"monospace", letterSpacing:1, marginBottom:14 }}>HOW TO ENTER PALMS VIA GOOGLE SHEETS</div>
+                    {[
+                      ["1","Open your Google Sheet","Go to the sheet named BNI Miracle — Leadership Data"],
+                      ["2","Click the PALMS tab","It is the second tab at the bottom of the sheet"],
+                      ["3","Paste or type data","Row 1 is the header — enter data from row 2 onward. Columns: MemberName · AttendancePct · ReferralsGiven · TYFCB · Meetings121 · Visitors"],
+                      ["4","Click Sync here","Come back to this dashboard and click the SYNC button in the top-right. All composite scores will update instantly."],
+                    ].map(([n,title,sub]) => (
+                      <div key={n} style={{ display:"flex", gap:14, marginBottom:16, alignItems:"flex-start" }}>
+                        <div style={{ width:26, height:26, borderRadius:"50%", background:"#1A1408", border:"1px solid #D4A843", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <span style={{ fontSize:11, fontWeight:800, color:"#D4A843" }}>{n}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#D4E3F5", marginBottom:3 }}>{title}</div>
+                          <div style={{ fontSize:11, color:"#3A5070", lineHeight:1.6 }}>{sub}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ background:"#0A1020", borderRadius:10, padding:14, border:"1px solid #1A2840" }}>
+                      <div style={{ fontSize:10, color:"#3A5070", fontFamily:"monospace", marginBottom:6 }}>PALMS TAB COLUMN FORMAT</div>
+                      <div style={{ fontSize:11, fontFamily:"monospace", color:"#4A6A80", lineHeight:2 }}>
+                        MemberName · AttendancePct · ReferralsGiven · TYFCB · Meetings121 · Visitors<br/>
+                        <span style={{ color:"#5A8090" }}>Amrath Acharya · 88 · 7 · 120000 · 8 · 2</span>
+                      </div>
+                    </div>
+                    {sheetsAPI.configured() && (
+                      <button onClick={onSync} style={{ marginTop:14, width:"100%", padding:"12px", background:"linear-gradient(135deg,#C9952C,#E8B84B)", border:"none", borderRadius:10, color:"#0A0D14", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:1, fontFamily:"inherit" }}>
+                        ⟳ SYNC FROM GOOGLE SHEETS NOW
+                      </button>
+                    )}
+                    {!sheetsAPI.configured() && (
+                      <div style={{ marginTop:14, padding:"10px 14px", background:"#1A0808", border:"1px solid #3A1A1A", borderRadius:10, fontSize:11, color:"#F5A0A0" }}>
+                        Google Sheets is not configured yet. Add your Script URL to index.html line 30 first.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PALMS loaded confirmation */}
+            {Object.keys(palmsData).length > 0 && (
+              <div style={{ background:"#0A1A0A", border:"1px solid #1A4A1A", borderRadius:12, padding:16, marginBottom:14 }}>
+                <div style={{ fontSize:10, color:"#7CC96E", fontFamily:"monospace", marginBottom:10 }}>✓ PALMS DATA ACTIVE — {Object.keys(palmsData).length} MEMBERS LOADED{sheetsAPI.configured()?" · Saved to Google Sheets":""}</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {Object.keys(palmsData).map(n => (
+                    <span key={n} style={{ fontSize:10, color:"#7CC96E", background:"#0A2A0A", padding:"3px 10px", borderRadius:20, border:"1px solid #1A4A1A" }}>{n}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:24 }}>
+            <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:24 }}>
+              <div style={{ fontSize:11, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:12 }}>COMPOSITE SCORE FORMULA</div>
+              {[
+                ["Attendance % (last 3 months)","0–20 pts","90%+ = 20 · 80–89% = 15 · 70–79% = 10 · 60–69% = 5"],
+                ["Referrals Given","0–12 pts","12+ = 12 · 8–11 = 9 · 4–7 = 6 · 1–3 = 3"],
+                ["TYFCB Received","0–8 pts","₹5L+ = 8 · ₹2–5L = 6 · ₹50k–2L = 4 · below = 2"],
+                ["1-2-1 Meetings","0–6 pts","10+ = 6 · 6–9 = 4 · 3–5 = 2"],
+                ["Visitors Invited","0–4 pts","4+ = 4 · 2–3 = 2 · 1 = 1"],
+                ["Quiz Score (17 questions)","0–50 pts","Normalized from raw quiz range"],
+              ].map(([label,pts,rule]) => (
+                <div key={label} style={{ display:"grid", gridTemplateColumns:"1fr 60px 1fr", gap:10, padding:"8px 0", borderBottom:"1px solid #0F1829", alignItems:"start" }}>
+                  <span style={{ fontSize:12, color:"#D4E3F5" }}>{label}</span>
+                  <span style={{ fontSize:12, color:"#D4A843", fontFamily:"monospace" }}>{pts}</span>
+                  <span style={{ fontSize:11, color:"#3A5070" }}>{rule}</span>
+                </div>
+              ))}
+              <div style={{ marginTop:12, padding:"10px 14px", background:"#080D1A", borderRadius:8, border:"1px solid #1A2840" }}>
+                <div style={{ fontSize:11, color:"#7A8BA3" }}>Total composite = PALMS (max 50) + Quiz (max 50) = <span style={{ color:"#D4A843", fontWeight:700 }}>100 points</span></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROLE MAP TAB */}
+        {tab === "roles" && (
+          <div>
+            {teams.map(team => {
+              const teamRoles = ROLES.filter(r => r.team === team);
+              const tc = TEAM_COLORS[team];
+              return (
+                <div key={team} style={{ marginBottom:12, background:"#0D1526", border:`1px solid ${tc}30`, borderRadius:14, overflow:"hidden" }}>
+                  <div style={{ padding:"12px 18px", borderBottom:`1px solid ${tc}20`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:9, color:tc, fontFamily:"monospace", letterSpacing:2, marginBottom:2 }}>{team.toUpperCase()}</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#D4E3F5" }}>{teamRoles.length} roles</div>
+                    </div>
+                    <div style={{ fontSize:9, fontFamily:"monospace", color:"#2A3A4A" }}>
+                      ● Strong fit  ◐ Moderate  ○ Not assessed / low fit
+                    </div>
+                  </div>
+                  {teamRoles.map(role => {
+                    const allA = [role.assignees.primary, role.assignees.secondary, ...(role.assignees.support||[])].filter(Boolean);
+                    const isVacant = !role.assignees.primary;
+                    return (
+                      <div key={role.id} style={{ padding:"11px 18px", borderBottom:"1px solid #0A1020", display:"grid", gridTemplateColumns:"26px 1fr auto", gap:10, alignItems:"start" }}>
+                        <div style={{ fontSize:17, paddingTop:1 }}>{role.icon}</div>
+                        <div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:12, fontWeight:600, color:"#D4E3F5" }}>{role.title}</span>
+                            {isVacant && <span style={{ fontSize:8, color:"#F5614A", background:"#1A0808", padding:"2px 8px", borderRadius:10, border:"1px solid #3A1A1A" }}>VACANT</span>}
+                            {assignments[role.id] && <span style={{ fontSize:8, color:"#D4A843", background:"#1A1408", padding:"2px 8px", borderRadius:10, border:"1px solid #2A2010" }}>ASSIGNED: {assignments[role.id]}</span>}
+                          </div>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                            {allA.length > 0 ? allA.map(n => {
+                              const fit = getAsmFit(n, role.id);
+                              const dotColor = fit ? fitColor(fit.fitPct) : "#2A3A4A";
+                              return (
+                                <div key={n} style={{ display:"flex", alignItems:"center", gap:4, background:"#080D1A", borderRadius:8, padding:"3px 9px", border:"1px solid #1A2840" }}>
+                                  <div style={{ width:6, height:6, borderRadius:"50%", background:dotColor }}/>
+                                  <span style={{ fontSize:11, color:"#7A8BA3" }}>{n}</span>
+                                  {fit ? <span style={{ fontSize:10, color:fitColor(fit.fitPct), fontFamily:"monospace", fontWeight:700 }}>{fit.fitPct}%</span>
+                                    : <span style={{ fontSize:9, color:"#2A3A4A", fontFamily:"monospace" }}>pending</span>}
+                                </div>
+                              );
+                            }) : <span style={{ fontSize:11, color:"#2A3A4A", fontStyle:"italic" }}>No assignees yet</span>}
+                          </div>
+                        </div>
+                        <div style={{ textAlign:"right", flexShrink:0 }}>
+                          <div style={{ fontSize:8, color:"#2A3A4A", fontFamily:"monospace" }}>MIN</div>
+                          <div style={{ fontSize:10, color:"#2A4060", fontFamily:"monospace" }}>{role.minComposite}/100</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* MEMBERS TAB */}
+        {tab === "members" && (
+          <div>
+            {assessed.length === 0 ? (
+              <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:40, textAlign:"center" }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>📋</div>
+                <div style={{ color:"#5A7090", fontSize:13 }}>No members have completed the assessment yet.</div>
+              </div>
+            ) : (
+              <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:14, overflow:"hidden" }}>
+                <div style={{ padding:"10px 16px", borderBottom:"1px solid #1A2840", display:"grid", gridTemplateColumns:"1fr 70px 50px 70px 80px 1fr", gap:8, fontSize:8, color:"#2A3A4A", fontFamily:"monospace", letterSpacing:1 }}>
+                  <span>MEMBER</span><span>COMPOSITE</span><span>QUIZ</span><span>PALMS</span><span>TYPE</span><span>BEST ROLE FIT</span>
+                </div>
+                {assessed.sort((a,b) => b[1].composite - a[1].composite).map(([name,r], i) => {
+                  const best = r.roleFits ? r.roleFits[0] : null;
+                  const pd = PERSONALITY_DATA[r.personality];
+                  return (
+                    <div key={name} style={{ padding:"11px 16px", borderBottom:i<assessed.length-1?"1px solid #0A0F1A":"none", display:"grid", gridTemplateColumns:"1fr 70px 50px 70px 80px 1fr", gap:8, alignItems:"center" }}>
+                      <div>
+                        <div style={{ fontSize:12, fontWeight:600, color:"#D4E3F5" }}>{name}</div>
+                        {r.risks>=2 && <div style={{ fontSize:9, color:"#F5A0A0" }}>⚠ {r.risks} flags</div>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:800, color:compositeColor(r.composite) }}>{r.composite}</div>
+                        <div style={{ fontSize:9, color:r.categoryColor, fontFamily:"monospace" }}>{r.category.split(" ")[0]}</div>
+                      </div>
+                      <div style={{ fontSize:12, color:"#4ABCF5", fontFamily:"monospace" }}>{r.quizNorm}</div>
+                      <div style={{ fontSize:12, color:r.hasPalms?"#7CC96E":"#3A4A5A", fontFamily:"monospace" }}>
+                        {r.hasPalms ? r.palmsScore : "—"}
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                        <span style={{ fontSize:13 }}>{pd.icon}</span>
+                        <span style={{ fontSize:9, color:pd.color }}>{r.personality}</span>
+                      </div>
+                      <div style={{ fontSize:10, color:"#5A7090" }}>
+                        {best && <><span style={{ fontSize:13, marginRight:4 }}>{best.icon}</span>{best.title} <span style={{ color:fitColor(best.fitPct), fontFamily:"monospace", fontWeight:700 }}>({best.fitPct}%)</span></>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GAPS TAB */}
+        {tab === "gaps" && (
+          <div>
+            {gaps.length === 0 ? (
+              <div style={{ background:"#0D1526", border:"1px solid #1A5A2A", borderRadius:16, padding:32, textAlign:"center" }}>
+                <div style={{ fontSize:32, marginBottom:10 }}>✅</div>
+                <div style={{ color:"#7CC96E", fontSize:14, fontWeight:700 }}>No critical gaps detected</div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize:12, color:"#5A7090", marginBottom:14 }}>{gaps.length} role{gaps.length!==1?"s":""} need attention.</div>
+                {gaps.map(role => {
+                  const allA = [role.assignees.primary, role.assignees.secondary, ...(role.assignees.support||[])].filter(Boolean);
+                  const isVacant = !role.assignees.primary;
+                  const tc = TEAM_COLORS[role.team];
+                  const candidates = assessed
+                    .filter(([n]) => !allA.includes(n))
+                    .map(([n,r]) => ({ name:n, fit:(r.roleFits ? r.roleFits.find(rf => rf.id === role.id) : null), composite:r.composite }))
+                    .filter(c => c.fit && c.composite >= role.minComposite * 0.8)
+                    .sort((a,b) => b.fit.fitPct - a.fit.fitPct)
+                    .slice(0,3);
+                  return (
+                    <div key={role.id} style={{ background:"#0D1526", border:`1px solid ${isVacant?"#3A1A1A":"#2A1A08"}`, borderRadius:12, padding:16, marginBottom:10 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                        <span style={{ fontSize:20 }}>{role.icon}</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:"#D4E3F5" }}>{role.title}</div>
+                          <div style={{ fontSize:9, color:tc, fontFamily:"monospace" }}>{role.team}</div>
+                        </div>
+                        <span style={{ fontSize:9, color:isVacant?"#F5614A":"#F5A623", background:isVacant?"#1A0808":"#1A1008", padding:"3px 10px", borderRadius:10, border:`1px solid ${isVacant?"#3A1A1A":"#3A2A10"}` }}>
+                          {isVacant?"VACANT":"LOW FIT"}
+                        </span>
+                      </div>
+                      {candidates.length > 0 ? (
+                        <>
+                          <div style={{ fontSize:9, color:"#3A5070", fontFamily:"monospace", marginBottom:8 }}>DIAGNOSTIC CANDIDATES (composite ≥ {Math.round(role.minComposite*0.8)})</div>
+                          {candidates.map(c => (
+                            <div key={c.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 10px", background:"#080D1A", borderRadius:8, marginBottom:5, border:"1px solid #1A2840" }}>
+                              <span style={{ fontSize:12, color:"#7A8BA3" }}>{c.name}</span>
+                              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                                <span style={{ fontSize:10, color:"#4ABCF5", fontFamily:"monospace" }}>Composite: {c.composite}</span>
+                                <span style={{ fontSize:12, fontWeight:700, color:fitColor(c.fit.fitPct), fontFamily:"monospace" }}>{c.fit.fitPct}% fit</span>
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <div style={{ fontSize:11, color:"#2A3A4A", fontStyle:"italic" }}>No assessed candidates above threshold yet.</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ASSIGNMENTS TAB */}
+        {tab === "assign" && (
+          <div>
+            <div style={{ background:"#0D1526", border:"1px solid #1A2840", borderRadius:16, padding:20, marginBottom:14 }}>
+              <div style={{ fontSize:11, color:"#D4A843", fontFamily:"monospace", letterSpacing:2, marginBottom:6 }}>LEADERSHIP TEAM DELIBERATION LOG</div>
+              <div style={{ fontSize:12, color:"#3A5070", marginBottom:16 }}>Record role assignment decisions and reasoning. This log is visible only to the leadership team.</div>
+              {ROLES.map(role => {
+                const tc = TEAM_COLORS[role.team];
+                const isVacant = !role.assignees.primary;
+                const top3ForRole = assessed
+                  .map(([n,r]) => ({ name:n, fit:(r.roleFits ? r.roleFits.find(rf=>rf.id===role.id) : null), composite:r.composite }))
+                  .filter(c => c.fit)
+                  .sort((a,b) => b.fit.fitPct - a.fit.fitPct)
+                  .slice(0,3);
+                return (
+                  <div key={role.id} style={{ marginBottom:10, background:"#080D1A", borderRadius:12, border:"1px solid #1A2840", overflow:"hidden" }}>
+                    <div style={{ padding:"12px 14px", borderBottom:"1px solid #1A2840", display:"flex", alignItems:"center", gap:10 }}>
+                      <span style={{ fontSize:16 }}>{role.icon}</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#D4E3F5" }}>{role.title}</div>
+                        <div style={{ fontSize:9, color:tc, fontFamily:"monospace" }}>{role.team}</div>
+                      </div>
+                      {isVacant && <span style={{ fontSize:9, color:"#F5614A", background:"#1A0808", padding:"2px 8px", borderRadius:10, border:"1px solid #3A1A1A" }}>VACANT</span>}
+                      {assignments[role.id] && <span style={{ fontSize:10, color:"#D4A843", fontFamily:"monospace" }}>→ {assignments[role.id]}</span>}
+                    </div>
+                    <div style={{ padding:"10px 14px" }}>
+                      <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+                        <select onChange={e => setAssignments(prev => ({...prev,[role.id]:e.target.value}))} value={assignments[role.id]||""}
+                          style={{ flex:1, minWidth:160, padding:"7px 10px", background:"#0D1526", border:"1px solid #1E2D4A", borderRadius:8, color:assignments[role.id]?"#F0E6D3":"#5A7090", fontSize:12, outline:"none", fontFamily:"inherit", cursor:"pointer" }}>
+                          <option value="">Record assignment decision...</option>
+                          {MEMBERS.map(m => {
+                            const fit = (function(){var _a=assessed.find(function(_r){return _r[0]===m});return _a&&_a[1]&&_a[1].roleFits&&_a[1].roleFits.find(function(rf){return rf.id===role.id});})();
+                            return <option key={m} value={m}>{m}{fit?` (${fit.fitPct}% fit)`:""}</option>;
+                          })}
+                        </select>
+                      </div>
+                      {top3ForRole.length > 0 && (
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:9, color:"#2A3A4A", fontFamily:"monospace", alignSelf:"center" }}>DIAGNOSTIC TOP 3:</span>
+                          {top3ForRole.map(c => (
+                            <span key={c.name} onClick={() => setAssignments(prev=>({...prev,[role.id]:c.name}))}
+                              style={{ fontSize:10, color:fitColor(c.fit.fitPct), background:"#080D1A", padding:"3px 10px", borderRadius:20, border:`1px solid ${fitColor(c.fit.fitPct)}40`, cursor:"pointer" }}>
+                              {c.name} {c.fit.fitPct}%
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <textarea placeholder="Reasoning / notes for this decision (visible to leadership team only)..."
+                        value={deliberation[role.id]||""} onChange={e => setDeliberation(prev=>({...prev,[role.id]:e.target.value}))}
+                        style={{ width:"100%", marginTop:8, padding:"8px 10px", background:"#0D1526", border:"1px solid #1A2840", borderRadius:8, color:"#7A8BA3", fontSize:11, outline:"none", fontFamily:"inherit", resize:"vertical", minHeight:52, boxSizing:"border-box" }}/>
+                      {(assignments[role.id] || deliberation[role.id]) && (
+                        <button onClick={() => onSaveAssignment(role.id, role.title, assignments[role.id]||"", deliberation[role.id]||"")}
+                          style={{ marginTop:8, padding:"7px 16px", background:"linear-gradient(135deg,#C9952C,#E8B84B)", border:"none", borderRadius:8, color:"#0A0D14", fontSize:11, fontWeight:700, cursor:"pointer", letterSpacing:1, fontFamily:"inherit" }}>
+                          SAVE TO SHEETS ↑
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <button onClick={onBack} style={{ marginTop:16, padding:"9px 18px", background:"transparent", border:"1px solid #1E2D4A", borderRadius:10, color:"#3A5070", fontSize:10, cursor:"pointer", fontFamily:"monospace", letterSpacing:1 }}>
+          ← BACK
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [screen,          setScreen]          = useState("welcome");
+  const [memberName,      setMemberName]       = useState("");
+  const [result,          setResult]           = useState(null);
+  const [assessedMembers, setAssessedMembers]  = useState({});
+  const [palmsData,       setPalmsData]        = useState({});
+  const [syncStatus,      setSyncStatus]       = useState("idle"); // idle|syncing|synced|error
+  const [assignments,     setAssignments]      = useState({});
+
+  // Sync all data from Sheets whenever the dashboard screen opens
+  useEffect(() => {
+    if (screen === "dashboard") syncFromSheets();
+  }, [screen]);
+
+  async function syncFromSheets() {
+    if (!sheetsAPI.configured()) return;
+    setSyncStatus("syncing");
+    try {
+      const data = await sheetsAPI.get({ action: "getAll" });
+      if (!data) { setSyncStatus("error"); return; }
+
+      // Reconstruct assessedMembers (roleFits computed client-side)
+      if (data.assessments && data.assessments.length > 0) {
+        const rebuilt = {};
+        data.assessments.forEach(row => {
+          rebuilt[row.memberName] = reconstructFromSheets(row);
+        });
+        setAssessedMembers(prev => ({ ...prev, ...rebuilt }));
+      }
+
+      // Load PALMS and recompute composites if PALMS data exists
+      if (data.palms && Object.keys(data.palms).length > 0) {
+        setPalmsData(data.palms);
+        setAssessedMembers(prev => {
+          const updated = { ...prev };
+          Object.entries(updated).forEach(([name, r]) => {
+            const palms = data.palms[name] || null;
+            if (palms) {
+              const palmsScore = scorePalms(palms);
+              const { composite, quizNorm, hasPalms } = computeComposite(r.quizTotal || 0, palmsScore);
+              let category, categoryColor;
+              if (composite >= 80)      { category="Strategic Leader";   categoryColor="#D4A843"; }
+              else if (composite >= 62) { category="Operational Leader"; categoryColor="#4ABCF5"; }
+              else if (composite >= 45) { category="Emerging Leader";    categoryColor="#7CC96E"; }
+              else                      { category="Active Member";      categoryColor="#888"; }
+              const roleFits = computeRoleFit(r.scores, r.personality, composite, r.risks);
+              updated[name] = { ...r, composite, quizNorm, palmsScore, palms, hasPalms, category, categoryColor, roleFits };
+            }
+          });
+          return updated;
+        });
+      }
+
+      // Load saved role assignments
+      if (data.assignments) setAssignments(data.assignments);
+
+      setSyncStatus("synced");
+    } catch(e) {
+      console.error("Sync error:", e);
+      setSyncStatus("error");
+    }
+  }
+
+  function handleStart(name) { setMemberName(name); setScreen("quiz"); }
+
+  async function handleComplete(answers, riskAnswers) {
+    const r = computeResult(answers, riskAnswers, palmsData, memberName);
+    setResult(r);
+    setAssessedMembers(prev => ({ ...prev, [memberName]: r }));
+    setScreen("results");
+    // Save to Sheets in background
+    sheetsAPI.post({
+      action        : "saveAssessment",
+      memberName,
+      composite     : r.composite,
+      quizTotal     : r.quizTotal,
+      quizNorm      : r.quizNorm,
+      palmsScore    : r.palmsScore,
+      hasPalms      : r.hasPalms,
+      category      : r.category,
+      categoryColor : r.categoryColor,
+      personality   : r.personality,
+      risks         : r.risks,
+      scores        : r.scores,
+      riskFlags     : Object.entries(riskAnswers).filter(([,v])=>v).map(([k])=>k)
+    });
+  }
+
+  function handlePalmsUpload(data) {
+    setPalmsData(data);
+    setAssessedMembers(prev => {
+      const updated = {};
+      Object.entries(prev).forEach(([name, r]) => {
+        const palms = data[name] || null;
+        const palmsScore = scorePalms(palms);
+        const { composite, quizNorm, hasPalms } = computeComposite(r.quizTotal || 0, palmsScore);
+        let category, categoryColor;
+        if (composite >= 80)      { category="Strategic Leader";   categoryColor="#D4A843"; }
+        else if (composite >= 62) { category="Operational Leader"; categoryColor="#4ABCF5"; }
+        else if (composite >= 45) { category="Emerging Leader";    categoryColor="#7CC96E"; }
+        else                      { category="Active Member";      categoryColor="#888"; }
+        const roleFits = computeRoleFit(r.scores, r.personality, composite, r.risks);
+        updated[name] = { ...r, composite, quizNorm, palmsScore, palms, hasPalms, category, categoryColor, roleFits };
+      });
+      return updated;
+    });
+    // Save PALMS to Sheets in background
+    sheetsAPI.post({ action: "savePalms", palmsData: data });
+  }
+
+  async function handleSaveAssignment(roleId, roleTitle, assignedMember, notes) {
+    setAssignments(prev => ({ ...prev, [roleId]: { assignedMember, notes, timestamp: new Date().toISOString() } }));
+    sheetsAPI.post({ action: "saveAssignment", roleId, roleTitle, assignedMember, notes });
+  }
+
+  if (screen === "welcome")   return <WelcomeScreen onStart={handleStart} onAdmin={() => setScreen("dashboard")}/>;
+  if (screen === "quiz")      return <QuizScreen memberName={memberName} onComplete={handleComplete}/>;
+  if (screen === "results")   return <ResultsScreen memberName={memberName} result={result} onViewDashboard={() => setScreen("dashboard")} onRetake={() => setScreen("welcome")}/>;
+  if (screen === "dashboard") return <AdminDashboard
+    assessedMembers={assessedMembers}
+    palmsData={palmsData}
+    assignments={assignments}
+    syncStatus={syncStatus}
+    onUploadPalms={handlePalmsUpload}
+    onSaveAssignment={handleSaveAssignment}
+    onSync={syncFromSheets}
+    onBack={() => setScreen(result ? "results" : "welcome")}
+  />;
+  return null;
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
